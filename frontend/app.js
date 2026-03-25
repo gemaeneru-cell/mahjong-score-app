@@ -43,6 +43,22 @@ const refs = {
   toast: document.getElementById("toast"),
 };
 
+// 👇 ---【修正箇所1】リーチボイスの設定 (冒頭) ---
+// 使用するボイスファイルのパスを配列にする (いくつでも追加可能です)
+const reachSoundPaths = [
+  '/assets/reach_1.mp3',
+  '/assets/reach_2.mp3',
+  '/assets/reach_3.mp3'
+];
+
+// Audio オブジェクトの配列を作成し、事前読み込み (load())
+const reachSounds = reachSoundPaths.map(path => {
+  const audio = new Audio(path);
+  audio.load();
+  return audio;
+});
+// ----------------------------------------------------
+
 function roomStorageKey(roomId) {
   return `mahjong-score:${roomId}`;
 }
@@ -412,7 +428,31 @@ refs.createRoomForm.addEventListener("submit", createRoom);
 refs.joinRoomForm.addEventListener("submit", joinRoomFromForm);
 refs.winForm.addEventListener("submit", submitWin);
 refs.winTypeSelect.addEventListener("change", syncWinFormVisibility);
-refs.reachBtn.addEventListener("click", () => callSimpleAction("submit_reach"));
+
+
+refs.reachBtn.addEventListener("click", async () => {
+  // 1. まずサーバーへリーチ申请を送る
+  const ack = await emitAck("submit_reach", {});
+  
+  // 2. サーバーから「OK (ok: true)」が戻ってきたら、ローカルでサウンドを鳴らす
+  // (ブロードキャストしないため、クリックした人のスマホのみで鳴ります)
+  if (ack?.ok) {
+    if (reachSounds.length > 0) {
+      // 配列からランダムなサウンドを選ぶ
+      const randomIndex = Math.floor(Math.random() * reachSounds.length);
+      const selectedSound = reachSounds[randomIndex];
+      
+      // 再生位置をリセットして再生
+      selectedSound.currentTime = 0;
+      selectedSound.play().catch(err => console.log("再生ブロック (ローカル):", err));
+    }
+  } else {
+    // エラーの場合はトーストを表示（これまで通り）
+    showToast(ack?.error || "操作に失敗しました。", true);
+  }
+});
+
+
 refs.undoBtn.addEventListener("click", () => callSimpleAction("undo_last"));
 refs.drawBtn.addEventListener("click", () => callSimpleAction("start_draw"));
 refs.tenpaiBtn.addEventListener("click", () => submitDrawStatus(true));
