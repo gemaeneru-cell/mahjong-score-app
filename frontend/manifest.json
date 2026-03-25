@@ -1,0 +1,16 @@
+{
+  "name": "リアルタイム麻雀点数管理",
+  "short_name": "麻雀スコア",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#020617",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/8173/8173004.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

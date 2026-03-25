@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>リアルタイム麻雀点数管理</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <link rel="stylesheet" href="/assets/styles.css?v=6" />
+  </head>
+  <body class="bg-slate-950 text-slate-50 overflow-hidden">
+    <div id="rotateHint" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-950 px-6 text-center">
+      <div>
+        <p class="text-2xl font-bold mb-2">横向きで利用してください</p>
+        <p class="text-slate-300">全自動卓のスマホホルダー利用を想定した、ランドスケープ専用UIです。</p>
+      </div>
+    </div>
+
+    <link rel="manifest" href="/assets/manifest.json" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="麻雀スコア" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <main id="app" class="h-screen w-screen p-1 sm:p-2 md:p-4">
+      <div class="landscape-shell h-full rounded-2xl md:rounded-3xl border border-slate-800 bg-slate-900/80 shadow-2xl backdrop-blur flex flex-col">
+        <header class="flex shrink-0 items-center justify-between gap-2 border-b border-slate-800 px-3 py-2 md:px-4 md:py-3">
+          <div>
+            <h1 class="text-lg md:text-2xl font-bold tracking-wide">リアルタイム麻雀点数管理</h1>
+            <p id="roomMeta" class="text-xs md:text-sm text-slate-400">ルーム未参加</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <div id="connectionBadge" class="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-[10px] md:text-xs text-emerald-300">Socket 接続中</div>
+            <button id="copyRoomBtn" class="rounded-xl border border-slate-700 px-2 py-1 md:px-3 md:py-2 text-xs md:text-sm hover:bg-slate-800">部屋IDコピー</button>
+          </div>
+        </header>
+
+        <section id="setupSection" class="grid flex-1 grid-cols-2 gap-2 md:gap-4 p-2 md:p-4 overflow-y-auto items-start pb-12">
+          <div class="panel">
+            <h2 class="panel-title">部屋を作る</h2>
+            <form id="createRoomForm" class="space-y-3">
+              <label class="field">
+                <span>表示名</span>
+                <input required name="name" maxlength="30" value="Host" />
+              </label>
+              <div class="grid grid-cols-2 gap-3">
+                <label class="field">
+                  <span>人数</span>
+                  <select name="seats">
+                    <option value="4">4人打ち</option>
+                    <option value="3">3人打ち</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>初期持ち点</span>
+                  <input type="number" name="initial_points" value="25000" />
+                </label>
+              </div>
+              <label class="field">
+                <span>希望席</span>
+                <select name="requested_seat">
+                  <option value="">自動割当</option>
+                  <option value="0">東家スタート（起家）</option>
+                  <option value="1">南家スタート</option>
+                  <option value="2">西家スタート</option>
+                  <option value="3">北家スタート</option>
+                </select>
+              </label>
+              <label class="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
+                <input type="checkbox" name="approval_enabled" class="h-5 w-5" />
+                <span class="text-sm">点数承認システムを有効にする</span>
+              </label>
+              <button class="primary-btn w-full" type="submit">部屋を作成して参加</button>
+            </form>
+          </div>
+
+          <div class="panel">
+            <h2 class="panel-title">既存の部屋へ入る</h2>
+            <form id="joinRoomForm" class="space-y-3">
+              <label class="field">
+                <span>表示名</span>
+                <input required name="name" maxlength="30" value="Player" />
+              </label>
+              <label class="field">
+                <span>部屋ID</span>
+                <input required name="room_id" id="roomIdInput" maxlength="8" placeholder="例: AB12CD" />
+              </label>
+              <label class="field">
+                <span>希望席</span>
+                <select name="requested_seat" id="requestedSeatSelect">
+                  <option value="">自動割当</option>
+                  <option value="0">東家スタート（起家）</option>
+                  <option value="1">南家スタート</option>
+                  <option value="2">西家スタート</option>
+                  <option value="3">北家スタート</option>
+               </select>
+              </label>
+              <button class="primary-btn w-full" type="submit">部屋へ参加</button>
+            </form>
+          </div>
+        </section>
+
+        <section id="gameSection" class="hidden flex-1 grid-cols-[1.3fr_1fr] md:grid-cols-[1.4fr_1fr] gap-2 md:gap-4 p-2 md:p-4 min-h-0">
+          
+          <div class="flex flex-col h-full gap-2 min-h-0">
+            <div id="scoreboard" class="grid flex-1 gap-2 min-h-0 items-stretch"></div>
+            <div class="grid grid-cols-1 gap-2 shrink-0">
+              <div class="panel compact-panel">
+                <div class="grid grid-cols-4 gap-2 text-center">
+                  <div class="metric-box">
+                    <div class="metric-label">局</div>
+                    <div id="roundLabel" class="metric-value">東1局</div>
+                  </div>
+                  <div class="metric-box">
+                    <div class="metric-label">本場</div>
+                    <div id="honbaLabel" class="metric-value">0</div>
+                  </div>
+                  <div class="metric-box">
+                    <div class="metric-label">供託</div>
+                    <div id="kyotakuLabel" class="metric-value">0</div>
+                  </div>
+                  <div class="metric-box">
+                    <div class="metric-label">状態</div>
+                    <div id="statusLabel" class="metric-value text-base">進行中</div>
+                  </div>
+                </div>
+                <div class="mt-2 text-xs md:text-sm text-slate-300 truncate">
+                  <span class="font-semibold text-slate-100">直近:</span>
+                  <span id="lastEventLabel">-</span>
+                </div>
+              </div>
+              <div id="pendingPanel" class="panel compact-panel hidden"></div>
+            </div>
+          </div>
+
+          <div class="block space-y-3 overflow-y-auto overscroll-contain pr-1 pb-32 h-full w-full" style="-webkit-overflow-scrolling: touch;">
+            <div class="panel compact-panel">
+              <h3 class="panel-title">操作</h3>
+              <div class="grid grid-cols-2 gap-2">
+                <button id="reachBtn" class="accent-btn">リーチ</button>
+                <button id="undoBtn" class="secondary-btn">Undo</button>
+              </div>
+            </div>
+
+            <div class="panel compact-panel">
+              <h3 class="panel-title">和了入力</h3>
+              <form id="winForm" class="space-y-3">
+                <div class="grid grid-cols-2 gap-2">
+                  <label class="field">
+                    <span>和了種別</span>
+                    <select name="win_type" id="winTypeSelect">
+                      <option value="ron">ロン</option>
+                      <option value="tsumo">ツモ</option>
+                    </select>
+                  </label>
+                  <label class="field" id="ronTargetField">
+                    <span>放銃者</span>
+                    <select name="from_player_id" id="fromPlayerSelect"></select>
+                  </label>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <label class="field">
+                    <span>翻</span>
+                    <input type="number" min="1" name="han" value="3" />
+                  </label>
+                  <label class="field">
+                    <span>符</span>
+                    <input type="number" min="20" name="fu" value="40" />
+                  </label>
+                </div>
+                <button class="primary-btn w-full py-2" type="submit">和了を送信</button>
+              </form>
+            </div>
+
+            <div class="panel compact-panel">
+              <h3 class="panel-title">流局</h3>
+              <button id="drawBtn" class="secondary-btn w-full py-2">流局入力を開始（親のみ）</button>
+              <div id="drawResponsePanel" class="mt-3 hidden rounded-xl border border-amber-500/20 bg-amber-500/10 p-3">
+                <p class="font-semibold text-amber-200 text-sm">あなたの流局入力</p>
+                <div class="mt-2 grid grid-cols-2 gap-2">
+                  <button id="tenpaiBtn" class="accent-btn py-2 text-sm" type="button">テンパイ</button>
+                  <button id="notenBtn" class="secondary-btn py-2 text-sm" type="button">ノーテン</button>
+                </div>
+              </div>
+            </div>
+
+            <div id="hostPanel" class="panel compact-panel hidden">
+              <h3 class="panel-title">ホスト操作</h3>
+              <form id="hostAdjustForm" class="space-y-3">
+                <div class="grid grid-cols-2 gap-2">
+                  <label class="field">
+                    <span>対象</span>
+                    <select name="target_player_id" id="hostAdjustTarget"></select>
+                  </label>
+                  <label class="field">
+                    <span>点数</span>
+                    <input type="number" name="new_score" value="25000" />
+                  </label>
+                </div>
+                <button class="primary-btn w-full py-2" type="submit">手動点数調整</button>
+              </form>
+              <button id="resetScoresBtn" class="danger-btn mt-3 w-full py-2">原点戻し</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <div id="toast" class="pointer-events-none fixed bottom-4 left-1/2 z-50 hidden -translate-x-1/2 rounded-2xl border border-slate-700 bg-slate-900/95 px-4 py-3 text-sm shadow-2xl w-[90%] md:w-auto text-center"></div>
+
+    <script src="/assets/app.js?v=6" defer></script>
+  </body>
+</html>

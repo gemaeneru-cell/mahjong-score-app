@@ -1,0 +1,283 @@
+:root {
+  color-scheme: dark;
+}
+
+body {
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.panel {
+  border: 1px solid rgba(51, 65, 85, 0.9);
+  background: rgba(2, 6, 23, 0.75);
+  border-radius: 1.5rem;
+  padding: 1rem;
+  overflow: hidden;
+}
+
+.compact-panel {
+  padding: 0.9rem;
+}
+
+.panel-title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.field span {
+  color: rgb(203 213 225);
+  font-size: 0.875rem;
+}
+
+.field input,
+.field select {
+  border: 1px solid rgba(51, 65, 85, 0.9);
+  background: rgba(15, 23, 42, 0.9);
+  color: white;
+  border-radius: 1rem;
+  padding: 0.8rem 0.9rem;
+  outline: none;
+}
+
+.field input:focus,
+.field select:focus {
+  border-color: rgba(59, 130, 246, 0.75);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+}
+
+.primary-btn,
+.secondary-btn,
+.accent-btn,
+.danger-btn {
+  border-radius: 1rem;
+  padding: 0.9rem 1rem;
+  font-weight: 700;
+  transition: transform 120ms ease, opacity 120ms ease, background 120ms ease;
+}
+
+.primary-btn:hover,
+.secondary-btn:hover,
+.accent-btn:hover,
+.danger-btn:hover {
+  transform: translateY(-1px);
+}
+
+.primary-btn:disabled,
+.secondary-btn:disabled,
+.accent-btn:disabled,
+.danger-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.primary-btn {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.95), rgba(37, 99, 235, 0.95));
+}
+
+.secondary-btn {
+  border: 1px solid rgba(71, 85, 105, 0.95);
+  background: rgba(15, 23, 42, 0.95);
+}
+
+.accent-btn {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.95), rgba(5, 150, 105, 0.95));
+}
+
+.danger-btn {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.95), rgba(220, 38, 38, 0.95));
+}
+
+.metric-box {
+  border: 1px solid rgba(51, 65, 85, 0.9);
+  background: rgba(15, 23, 42, 0.75);
+  border-radius: 1rem;
+  padding: 0.8rem 0.6rem;
+}
+
+.metric-label {
+  color: rgb(148 163 184);
+  font-size: 0.8rem;
+}
+
+.metric-value {
+  font-size: 1.7rem;
+  line-height: 1.1;
+  font-weight: 800;
+  margin-top: 0.25rem;
+}
+
+/* 修正：点数カードのレイアウトを堅牢に */
+.score-card {
+  position: relative;
+  border-radius: 1.2rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(51, 65, 85, 0.95);
+  background: linear-gradient(160deg, rgba(15, 23, 42, 0.96), rgba(2, 6, 23, 0.96));
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center; /* 隙間を空けず中央に寄せる */
+  gap: 0.3rem;
+}
+
+.score-card.is-me {
+  border-color: rgba(59, 130, 246, 0.7);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12) inset;
+}
+
+.score-card.is-dealer {
+  background: linear-gradient(160deg, rgba(120, 53, 15, 0.96), rgba(41, 37, 36, 0.96));
+}
+
+.score-card.is-top {
+  border-color: rgba(16, 185, 129, 0.6);
+}
+
+.score-card.disconnected {
+  opacity: 0.6;
+}
+
+/* 修正：名前とバッジのヘッダー部分を横並びに */
+.score-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.score-name {
+  font-size: 1.1rem;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+.score-meta {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.score-badge {
+  border-radius: 9999px;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  border: 1px solid rgba(71, 85, 105, 0.95);
+  background: rgba(15, 23, 42, 0.85);
+  white-space: nowrap;
+}
+
+/* 修正：点数テキストが画面の高さに応じて自動で縮むように clamp を利用 */
+.score-value {
+  font-size: clamp(1.4rem, 4.5vh, 2.5rem);
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  margin: 0.1rem 0;
+}
+
+.score-sub {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  color: rgb(203 213 225);
+  font-size: 0.8rem;
+}
+
+@media (orientation: portrait) {
+  #rotateHint {
+    display: flex;
+  }
+  #app {
+    display: none;
+  }
+}
+
+.overflow-y-auto {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(71, 85, 105, 0.8) transparent;
+}
+.overflow-y-auto::-webkit-scrollbar {
+  width: 6px;
+}
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background-color: rgba(71, 85, 105, 0.8);
+  border-radius: 10px;
+}
+
+/* スマホ横置き（高さが極端に狭い画面）向けの超最適化 */
+@media (max-height: 480px) {
+  .panel {
+    border-radius: 1rem;
+    padding: 0.75rem;
+  }
+  .compact-panel {
+    padding: 0.5rem;
+  }
+  .panel-title {
+    font-size: 0.85rem;
+    margin-bottom: 0.4rem;
+  }
+  
+  /* カード内の隙間を極限まで削る */
+  .score-card {
+    padding: 0.4rem 0.6rem;
+    gap: 0.15rem;
+  }
+  .score-name {
+    font-size: 0.95rem;
+  }
+  .score-value {
+    font-size: 1.3rem;
+    margin: 0;
+  }
+  .score-sub {
+    font-size: 0.65rem;
+  }
+  .score-badge {
+    font-size: 0.55rem;
+    padding: 0.1rem 0.3rem;
+  }
+  
+  .metric-box {
+    padding: 0.3rem;
+    border-radius: 0.5rem;
+  }
+  .metric-label {
+    font-size: 0.65rem;
+  }
+  .metric-value {
+    font-size: 1.1rem;
+    margin-top: 0.1rem;
+  }
+  
+  .field span {
+    font-size: 0.75rem;
+  }
+  .field input, .field select {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.85rem;
+    border-radius: 0.5rem;
+  }
+  
+  .primary-btn, .secondary-btn, .accent-btn, .danger-btn {
+    padding: 0.5rem;
+    font-size: 0.85rem;
+    border-radius: 0.5rem;
+  }
+}
