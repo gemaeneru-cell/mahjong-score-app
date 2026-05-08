@@ -452,6 +452,23 @@ async def disconnect(sid: str) -> None:
         room.players[player_id].connected = False
         await emit_room_state(room)
 
+# 修正：明示的な退出イベントを追加
+@sio.event
+async def leave_room(sid: str, data: dict[str, Any]) -> None:
+    context = SID_TO_PLAYER.pop(sid, None)
+    if context:
+        room_id, player_id = context
+        room = ROOMS.get(room_id)
+        if room and player_id in room.players:
+            room.players[player_id].connected = False
+            await sio.leave_room(sid, room_id)
+            await emit_room_state(room)
+
+# 修正：Renderのスリープ防止通信を受け取るためのハンドラ
+@sio.event
+async def ping_keepalive(sid: str, data: dict[str, Any]) -> None:
+    pass
+
 
 @sio.event
 async def join_room(sid: str, data: dict[str, Any]) -> dict[str, Any]:
