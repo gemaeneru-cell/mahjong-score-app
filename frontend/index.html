@@ -6,7 +6,7 @@
     <title>リアルタイム麻雀点数管理</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
-    <link rel="stylesheet" href="/assets/styles.css?v=6" />
+    <link rel="stylesheet" href="/assets/styles.css?v=8" />
   </head>
   <body class="bg-slate-950 text-slate-50 overflow-hidden">
     <div id="rotateHint" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-950 px-6 text-center">
@@ -32,6 +32,7 @@
           <div class="flex items-center gap-2">
             <div id="connectionBadge" class="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-[10px] md:text-xs text-emerald-300">Socket 接続中</div>
             <button id="copyRoomBtn" class="rounded-xl border border-slate-700 px-2 py-1 md:px-3 md:py-2 text-xs md:text-sm hover:bg-slate-800">部屋IDコピー</button>
+            <button id="leaveRoomBtn" class="rounded-xl border border-red-500/30 bg-red-500/10 px-2 py-1 md:px-3 md:py-2 text-xs md:text-sm text-red-300 hover:bg-red-500/20">退出</button>
           </div>
         </header>
 
@@ -208,6 +209,6 @@
 
     <div id="toast" class="pointer-events-none fixed bottom-4 left-1/2 z-50 hidden -translate-x-1/2 rounded-2xl border border-slate-700 bg-slate-900/95 px-4 py-3 text-sm shadow-2xl w-[90%] md:w-auto text-center"></div>
 
-    <script src="/assets/app.js?v=6" defer></script>
+    <script src="/assets/app.js?v=8" defer></script>
   </body>
 </html>
