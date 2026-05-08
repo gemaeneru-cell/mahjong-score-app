@@ -1,7 +1,7 @@
 const socket = io({ 
   transports: ["websocket", "polling"],
   reconnection: true,
-  reconnectionAttempts: Infinity, // 無限に再接続を試みる
+  reconnectionAttempts: Infinity,
   reconnectionDelay: 1000,
 });
 
@@ -18,7 +18,7 @@ const refs = {
   roomMeta: document.getElementById("roomMeta"),
   connectionBadge: document.getElementById("connectionBadge"),
   copyRoomBtn: document.getElementById("copyRoomBtn"),
-  leaveRoomBtn: document.getElementById("leaveRoomBtn"), // 追加
+  leaveRoomBtn: document.getElementById("leaveRoomBtn"),
   setupSection: document.getElementById("setupSection"),
   gameSection: document.getElementById("gameSection"),
   createRoomForm: document.getElementById("createRoomForm"),
@@ -49,8 +49,18 @@ const refs = {
   toast: document.getElementById("toast"),
 };
 
-// 音声ファイルの読み込み
-const reachSound = new Audio('/assets/sounds/reach.mp3');
+/**
+ * リーチボイスのランダム設定
+ * スクリーンショットのファイル名に正確に合わせています
+ */
+const reachSounds = [
+  new Audio('/assets/001_ずんだもん（ノーマル）_リーチなのだ.mp3'),
+  new Audio('/assets/001_四国めたん（ノーマル）_リーチ.mp3'),
+  new Audio('/assets/001_春日部つむぎ（ノーマル）_リーチ.mp3')
+];
+
+// 音声を事前ロード（クリック時の遅延を防ぐ）
+reachSounds.forEach(s => s.load());
 
 function roomStorageKey(roomId) {
   return `mahjong-score:${roomId}`;
@@ -89,7 +99,7 @@ function setConnectionBadge(status) {
     b.textContent = "Socket 接続中";
     b.className = "rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-300";
   } else if (status === "reconnecting") {
-    b.textContent = "再接続・復帰中...";
+    b.textContent = "再接続中...";
     b.className = "rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs text-amber-300 animate-pulse";
   } else {
     b.textContent = "切断されました";
@@ -100,9 +110,8 @@ function setConnectionBadge(status) {
 async function emitAck(event, payload = {}) {
   return new Promise((resolve) => {
     if (!socket.connected) {
-      showToast("接続が切れています。復帰をお待ちください。", true);
-      resolve({ ok: false, error: "Disconnected" });
-      return;
+      showToast("接続待ちです...", true);
+      return resolve({ ok: false, error: "Disconnected" });
     }
     socket.emit(event, payload, (ack) => resolve(ack));
   });
@@ -118,11 +127,8 @@ function syncWinFormVisibility() {
 
 function updateUrl(roomId) {
   const url = new URL(window.location.href);
-  if (roomId) {
-    url.searchParams.set("room", roomId);
-  } else {
-    url.searchParams.delete("room");
-  }
+  if (roomId) url.searchParams.set("room", roomId);
+  else url.searchParams.delete("room");
   history.replaceState({}, "", url);
 }
 
@@ -185,11 +191,6 @@ function renderRoom(room) {
   refs.scoreboard.className = room.settings.seats === 4 ? "grid min-h-0 flex-1 grid-cols-2 grid-rows-2 gap-3 md:gap-4" : "grid min-h-0 flex-1 grid-cols-3 gap-3 md:gap-4";
   refs.scoreboard.innerHTML = room.players.map((player) => buildScoreCard(player, state.playerId)).join("");
 
-  if (room.last_event && room.last_event.includes("リーチ") && !renderRoom._lastHandledEvent?.includes(room.last_event)) {
-    reachSound.play().catch(() => {});
-  }
-  renderRoom._lastHandledEvent = room.last_event;
-
   refs.fromPlayerSelect.innerHTML = room.players.filter((p) => p.id !== state.playerId).map((p) => `<option value="${p.id}">${p.name}</option>`).join("");
   refs.hostAdjustTarget.innerHTML = room.players.map((p) => `<option value="${p.id}">${p.name}</option>`).join("");
 
@@ -218,7 +219,7 @@ async function joinRoom({ roomId, name, playerId = "", requestedSeat = "", silen
   });
 
   if (!ack?.ok) {
-    if (!silent) showToast(ack?.error || "部屋参加に失敗しました。", true);
+    if (!silent) showToast(ack?.error || "参加失敗", true);
     return;
   }
 
@@ -231,114 +232,86 @@ async function joinRoom({ roomId, name, playerId = "", requestedSeat = "", silen
   updateUrl(normalizedRoomId);
   openGameView();
   renderRoom(ack.room);
-  if (!silent) showToast(`復帰しました：${normalizedRoomId}`);
+  if (!silent) showToast(`ルーム復帰成功`);
 }
 
-// 退出処理
 async function leaveRoom() {
   if (!state.roomId) return;
-  
-  if (!confirm("対局を終了して部屋を退出しますか？\n（再参加するには再度部屋IDが必要になります）")) return;
-
-  const rid = state.roomId;
-  
-  // 1. サーバーへ通知
-  socket.emit("leave_room", { room_id: rid });
-
-  // 2. 自動復帰の記憶を抹消
-  localStorage.removeItem(roomStorageKey(rid));
-
-  // 3. 状態の初期化
+  if (!confirm("退出しますか？")) return;
+  socket.emit("leave_room", { room_id: state.roomId });
+  localStorage.removeItem(roomStorageKey(state.roomId));
   state.joined = false;
   state.roomId = "";
   state.playerId = "";
-  state.playerName = "";
-  
-  // 4. UIのリセット
   updateUrl("");
   openSetupView();
-  showToast("部屋を退出しました。");
 }
 
-// --- 通信・再接続イベント ---
-
+// 接続イベント
 socket.on("connect", async () => {
-  console.log("Connected. Socket ID:", socket.id);
   setConnectionBadge("connected");
-
   if (state.joined && state.roomId && state.playerId) {
     setConnectionBadge("reconnecting");
-    await joinRoom({
-      roomId: state.roomId,
-      name: state.playerName,
-      playerId: state.playerId,
-      silent: true,
-    });
+    await joinRoom({ roomId: state.roomId, name: state.playerName, playerId: state.playerId, silent: true });
   }
 });
 
-socket.on("disconnect", (reason) => {
-  console.warn("Disconnected:", reason);
-  setConnectionBadge("disconnected");
-});
+socket.on("disconnect", () => setConnectionBadge("disconnected"));
 
+// 5分毎の生存確認リクエスト
 setInterval(() => {
-  if (socket.connected) {
-    socket.emit("ping_keepalive", { t: Date.now() });
-  }
+  if (socket.connected) socket.emit("ping_keepalive", { t: Date.now() });
 }, 300000);
 
-// --- イベントリスナー登録 ---
+// --- イベントリスナー ---
 
 refs.createRoomForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const formData = new FormData(refs.createRoomForm);
-    const reqSeat = formData.get("requested_seat") || "";
-    const payload = {
-      name: formData.get("name"),
-      seats: Number(formData.get("seats")),
-      initial_points: Number(formData.get("initial_points")),
-      approval_enabled: formData.get("approval_enabled") === "on",
-      requested_seat: reqSeat,
-    };
-    const response = await fetch("/api/rooms", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const result = await response.json();
-    if (!response.ok) return showToast(result.detail, true);
-    refs.roomIdInput.value = result.room_id;
-    await joinRoom({ roomId: result.room_id, name: payload.name, playerId: result.player_id, requestedSeat: reqSeat });
+  e.preventDefault();
+  const formData = new FormData(refs.createRoomForm);
+  const payload = {
+    name: formData.get("name"),
+    seats: Number(formData.get("seats")),
+    initial_points: Number(formData.get("initial_points")),
+    approval_enabled: formData.get("approval_enabled") === "on",
+    requested_seat: formData.get("requested_seat") || "",
+  };
+  const res = await fetch("/api/rooms", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const result = await res.json();
+  if (!res.ok) return showToast(result.detail, true);
+  await joinRoom({ roomId: result.room_id, name: payload.name, playerId: result.player_id });
 });
 
 refs.joinRoomForm.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const formData = new FormData(refs.joinRoomForm);
-  await joinRoom({
-    roomId: formData.get("room_id"),
-    name: formData.get("name"),
-    requestedSeat: formData.get("requested_seat"),
-  });
+  const fd = new FormData(refs.joinRoomForm);
+  await joinRoom({ roomId: fd.get("room_id"), name: fd.get("name"), requestedSeat: fd.get("requested_seat") });
 });
 
 refs.leaveRoomBtn.addEventListener("click", leaveRoom);
 
-refs.winForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const formData = new FormData(refs.winForm);
-  const payload = {
-    win_type: formData.get("win_type"),
-    han: Number(formData.get("han")),
-    fu: Number(formData.get("fu")),
-    from_player_id: formData.get("from_player_id")
-  };
-  await emitAck("submit_win", payload);
+/**
+ * リーチボタン：ランダムボイス再生
+ */
+refs.reachBtn.addEventListener("click", () => {
+  const sound = reachSounds[Math.floor(Math.random() * reachSounds.length)];
+  sound.currentTime = 0;
+  sound.play().catch(() => {});
+  socket.emit("submit_reach", {});
 });
 
-refs.reachBtn.addEventListener("click", () => {
-    reachSound.play().catch(() => {});
-    socket.emit("submit_reach", {});
+refs.winForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const fd = new FormData(refs.winForm);
+  await emitAck("submit_win", {
+    win_type: fd.get("win_type"),
+    han: Number(fd.get("han")),
+    fu: Number(fd.get("fu")),
+    from_player_id: fd.get("from_player_id")
+  });
 });
 
 refs.undoBtn.addEventListener("click", () => callSimpleAction("undo_last"));
@@ -346,27 +319,23 @@ refs.drawBtn.addEventListener("click", () => callSimpleAction("start_draw"));
 refs.tenpaiBtn.addEventListener("click", () => submitDrawStatus(true));
 refs.notenBtn.addEventListener("click", () => submitDrawStatus(false));
 
-async function callSimpleAction(eventName) {
-  const ack = await emitAck(eventName, {});
-  if (!ack?.ok) showToast(ack?.error || "操作に失敗しました。", true);
+async function callSimpleAction(ev) {
+  const ack = await emitAck(ev, {});
+  if (!ack?.ok) showToast(ack?.error || "エラー", true);
 }
 
-async function submitDrawStatus(tenpai) {
-  const ack = await emitAck("submit_draw_status", { tenpai });
-  if (!ack?.ok) showToast(ack?.error || "入力に失敗しました。", true);
+async function submitDrawStatus(t) {
+  const ack = await emitAck("submit_draw_status", { tenpai: t });
+  if (!ack?.ok) showToast("送信失敗", true);
 }
 
-socket.on("room_state", (room) => {
-  if (state.roomId && room.id === state.roomId) renderRoom(room);
-});
-
+socket.on("room_state", (r) => { if (state.roomId && r.id === state.roomId) renderRoom(r); });
 socket.on("toast", (p) => p?.message && showToast(p.message));
 
 (function init() {
   syncWinFormVisibility();
   openSetupView();
   setConnectionBadge(socket.connected ? "connected" : "disconnected");
-  
   const rid = new URL(window.location.href).searchParams.get("room");
   if (rid) {
     const iden = loadIdentity(rid.toUpperCase());
