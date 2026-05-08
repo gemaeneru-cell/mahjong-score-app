@@ -18,6 +18,7 @@ const refs = {
   roomMeta: document.getElementById("roomMeta"),
   connectionBadge: document.getElementById("connectionBadge"),
   copyRoomBtn: document.getElementById("copyRoomBtn"),
+  leaveRoomBtn: document.getElementById("leaveRoomBtn"), // 追加
   setupSection: document.getElementById("setupSection"),
   gameSection: document.getElementById("gameSection"),
   createRoomForm: document.getElementById("createRoomForm"),
@@ -48,7 +49,7 @@ const refs = {
   toast: document.getElementById("toast"),
 };
 
-// 音声ファイルの読み込み（前回の修正分）
+// 音声ファイルの読み込み
 const reachSound = new Audio('/assets/sounds/reach.mp3');
 
 function roomStorageKey(roomId) {
@@ -170,8 +171,6 @@ function buildScoreCard(player, meId) {
   `;
 }
 
-// 描画ロジック等は変更なし（中略）
-
 function renderRoom(room) {
   state.room = room;
   const me = getMe(room);
@@ -186,7 +185,6 @@ function renderRoom(room) {
   refs.scoreboard.className = room.settings.seats === 4 ? "grid min-h-0 flex-1 grid-cols-2 grid-rows-2 gap-3 md:gap-4" : "grid min-h-0 flex-1 grid-cols-3 gap-3 md:gap-4";
   refs.scoreboard.innerHTML = room.players.map((player) => buildScoreCard(player, state.playerId)).join("");
 
-  // リーチ音のトリガー
   if (room.last_event && room.last_event.includes("リーチ") && !renderRoom._lastHandledEvent?.includes(room.last_event)) {
     reachSound.play().catch(() => {});
   }
@@ -198,10 +196,6 @@ function renderRoom(room) {
   const targetPlayer = room.players.find((p) => p.id === refs.hostAdjustTarget.value) || room.players[0];
   if (targetPlayer) refs.hostAdjustForm.elements.new_score.value = String(targetPlayer.score);
 
-  // 承認パネルや流局パネルの描画（既存の関数を呼び出し）
-  if (window.renderPendingPanel) renderPendingPanel(room);
-  if (window.renderDrawPanel) renderDrawPanel(room);
-
   const disableScoreActions = !room.ready || room.finished || Boolean(room.pending_action) || Boolean(room.draw_context?.active);
   refs.reachBtn.disabled = disableScoreActions;
   refs.undoBtn.disabled = !room.has_undo || Boolean(room.pending_action) || Boolean(room.draw_context?.active);
@@ -211,7 +205,6 @@ function renderRoom(room) {
   refs.copyRoomBtn.disabled = !room.id;
 }
 
-// 修正：joinRoom 関数を強化し、成功時に state を確実に更新するように
 async function joinRoom({ roomId, name, playerId = "", requestedSeat = "", silent = false }) {
   const normalizedRoomId = roomId.trim().toUpperCase();
   if (!normalizedRoomId) return;
@@ -229,7 +222,6 @@ async function joinRoom({ roomId, name, playerId = "", requestedSeat = "", silen
     return;
   }
 
-  // クライアント側状態の確定
   state.roomId = normalizedRoomId;
   state.playerId = ack.player_id;
   state.playerName = name;
@@ -242,13 +234,38 @@ async function joinRoom({ roomId, name, playerId = "", requestedSeat = "", silen
   if (!silent) showToast(`復帰しました：${normalizedRoomId}`);
 }
 
-// --- 再接続・復帰ロジックの強化 ---
+// 退出処理
+async function leaveRoom() {
+  if (!state.roomId) return;
+  
+  if (!confirm("対局を終了して部屋を退出しますか？\n（再参加するには再度部屋IDが必要になります）")) return;
+
+  const rid = state.roomId;
+  
+  // 1. サーバーへ通知
+  socket.emit("leave_room", { room_id: rid });
+
+  // 2. 自動復帰の記憶を抹消
+  localStorage.removeItem(roomStorageKey(rid));
+
+  // 3. 状態の初期化
+  state.joined = false;
+  state.roomId = "";
+  state.playerId = "";
+  state.playerName = "";
+  
+  // 4. UIのリセット
+  updateUrl("");
+  openSetupView();
+  showToast("部屋を退出しました。");
+}
+
+// --- 通信・再接続イベント ---
 
 socket.on("connect", async () => {
-  console.log("Connected to server. Socket ID:", socket.id);
+  console.log("Connected. Socket ID:", socket.id);
   setConnectionBadge("connected");
 
-  // もし参加済み（joined）なら、IDが変わっていても自動的に元のルームへ復帰する
   if (state.joined && state.roomId && state.playerId) {
     setConnectionBadge("reconnecting");
     await joinRoom({
@@ -265,14 +282,13 @@ socket.on("disconnect", (reason) => {
   setConnectionBadge("disconnected");
 });
 
-// Renderのスリープ防止（5分おきにサーバーへ信号を送る）
 setInterval(() => {
   if (socket.connected) {
     socket.emit("ping_keepalive", { t: Date.now() });
   }
 }, 300000);
 
-// 以下、イベントリスナー等は既存通り（中略）
+// --- イベントリスナー登録 ---
 
 refs.createRoomForm.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -306,6 +322,8 @@ refs.joinRoomForm.addEventListener("submit", async (e) => {
   });
 });
 
+refs.leaveRoomBtn.addEventListener("click", leaveRoom);
+
 refs.winForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const formData = new FormData(refs.winForm);
@@ -323,6 +341,21 @@ refs.reachBtn.addEventListener("click", () => {
     socket.emit("submit_reach", {});
 });
 
+refs.undoBtn.addEventListener("click", () => callSimpleAction("undo_last"));
+refs.drawBtn.addEventListener("click", () => callSimpleAction("start_draw"));
+refs.tenpaiBtn.addEventListener("click", () => submitDrawStatus(true));
+refs.notenBtn.addEventListener("click", () => submitDrawStatus(false));
+
+async function callSimpleAction(eventName) {
+  const ack = await emitAck(eventName, {});
+  if (!ack?.ok) showToast(ack?.error || "操作に失敗しました。", true);
+}
+
+async function submitDrawStatus(tenpai) {
+  const ack = await emitAck("submit_draw_status", { tenpai });
+  if (!ack?.ok) showToast(ack?.error || "入力に失敗しました。", true);
+}
+
 socket.on("room_state", (room) => {
   if (state.roomId && room.id === state.roomId) renderRoom(room);
 });
@@ -333,6 +366,7 @@ socket.on("toast", (p) => p?.message && showToast(p.message));
   syncWinFormVisibility();
   openSetupView();
   setConnectionBadge(socket.connected ? "connected" : "disconnected");
+  
   const rid = new URL(window.location.href).searchParams.get("room");
   if (rid) {
     const iden = loadIdentity(rid.toUpperCase());
@@ -341,7 +375,6 @@ socket.on("toast", (p) => p?.message && showToast(p.message));
         state.playerId = iden.playerId;
         state.playerName = iden.name;
         state.joined = true;
-        // 初期読み込み時の復帰
         joinRoom({ roomId: state.roomId, name: state.playerName, playerId: state.playerId, silent: true });
     }
   }
